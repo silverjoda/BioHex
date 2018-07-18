@@ -85,32 +85,54 @@ def run_episode(env, policy, scaler, animate=False):
         rewards: shape = (episode len,)
         unscaled_obs: useful for training scaler, shape = (episode len, obs_dim)
     """
-    obs = env.reset()
+    env_obs = env.reset()
     observes, actions, rewards, unscaled_obs = [], [], [], []
     done = False
     step = 0.0
-    step_ctr = 0
     scale, offset = scaler.get()
     scale[-1] = 1.0  # don't scale time step feature
     offset[-1] = 0.0  # don't offset time step feature
+
+    prev_torques = np.random.rand(8)
+    current_angles = env_obs[5:13]
+
     while not done:
         if animate:
             env.render()
+
+        obs = np.concatenate(prev_torques, current_angles)
         obs = obs.astype(np.float32).reshape((1, -1))
-        obs = np.append(obs, [[step]], axis=1)  # add time step feature
+
         unscaled_obs.append(obs)
         obs = (obs - offset) * scale  # center and scale observations
         observes.append(obs)
-        action = policy.sample(obs).reshape((1, -1)).astype(np.float32)
-        #print(action)
-        actions.append(action)
-        obs, reward, done, _ = env.step(np.squeeze(action, axis=0))
+        raw_action = np.squeeze(policy.sample(obs), 0).astype(np.float32)
+
+        # Calculate real oscillator torques
+        c0_p1, c0_p2, c0_p3, f0_p1, f0_p2, f0_p3, \
+        c1_p1, c1_p2, c1_p3, f1_p1, f1_p2, f1_p3, \
+        c2_p1, c2_p2, c2_p3, f2_p1, f2_p2, f2_p3, \
+        c3_p1, c3_p2, c3_p3, f3_p1, f3_p2, f3_p3 = raw_action
+
+        t_c0 = c0_p1 * np.sin(step * c0_p2 + c0_p3)
+        t_f0 = f0_p1 * np.sin(step * f0_p2 + f0_p3)
+        t_c1 = c1_p1 * np.sin(step * c1_p2 + c1_p3)
+        t_f1 = f1_p1 * np.sin(step * f1_p2 + f1_p3)
+        t_c2 = c2_p1 * np.sin(step * c2_p2 + c2_p3)
+        t_f2 = f2_p1 * np.sin(step * f2_p2 + f2_p3)
+        t_c3 = c3_p1 * np.sin(step * c3_p2 + c3_p3)
+        t_f3 = f3_p1 * np.sin(step * f3_p2 + f3_p3)
+
+        action = np.array([t_c0, t_f0, t_c1, t_f1, t_c2, t_f2, t_c3, t_f3])
+        prev_torques = action
+
+        actions.append(action.reshape((1, -1)).astype(np.float32))
+        env_obs, reward, done, _ = env.step(np.squeeze(action, axis=0))
 
         if not isinstance(reward, float):
             reward = np.asscalar(reward)
         rewards.append(reward)
-        step += 1e-3  # increment time step feature
-        step_ctr += 1
+        step += 1e-2  # increment time step feature
 
     return (np.concatenate(observes), np.concatenate(actions),
             np.array(rewards, dtype=np.float64), np.concatenate(unscaled_obs))

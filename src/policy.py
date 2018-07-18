@@ -98,6 +98,7 @@ class Policy(object):
                 6, activation='relu', name='c_hidden', reuse=True)
             c3_out = tfl.fully_connected(tmp_l, 3, activation='tanh', name='c_out', reuse=True)
 
+        with tf.variable_scope("femur"):
             # F0
             tmp_l = tfl.fully_connected(
                 tf.concat([self.prev_torque_ph[[0, 1]], self.current_angle_ph[1]]),
@@ -122,7 +123,7 @@ class Policy(object):
                 5, activation='relu', name='f_hidden', reuse=True)
             f3_out = tfl.fully_connected(tmp_l, 3, activation='tanh', name='f_out', reuse=True)
 
-        self.means = tf.concat([c0_out,c1_out,c2_out,c3_out,f0_out,f1_out,f2_out,f3_out], 1)
+        self.means = tf.concat([c0_out, f0_out, c1_out, f1_out, c2_out, f2_out, c3_out,f3_out], 1)
 
         self.lr = 1e-4
 

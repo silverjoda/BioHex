@@ -76,54 +76,55 @@ class Policy(object):
         # Make the individual osciallator weights
         with tf.variable_scope("coxa"):
             # C0
-            tmp_l = tfl.fully_connected(tf.concat([self.prev_torque_ph[[0,1,2,4,6]], self.current_angle_ph[0]]),
+            tmp_l = tfl.fully_connected(tf.concat([*[self.prev_torque_ph[:,i:i+1] for i in [0,1,2,4,6]], self.current_angle_ph[:, 0:1]], 1),
                                     6, activation='relu', name='c_hidden')
-            c0_out = tfl.fully_connected(tmp_l, 3, activation = 'tanh', name='c_out')
+            c0_out = tfl.fully_connected(tmp_l, 2, activation = 'tanh', name='c_out')
 
             # C1
             tmp_l = tfl.fully_connected(
-                tf.concat([self.prev_torque_ph[[0, 2, 3, 4, 6]], self.current_angle_ph[2]]),
+                tf.concat([*[self.prev_torque_ph[:, i:i + 1] for i in [0, 2, 3, 4, 6]], self.current_angle_ph[:, 2:3]],
+                          1),
                 6, activation='relu', name='c_hidden', reuse=True)
-            c1_out = tfl.fully_connected(tmp_l, 3, activation='tanh', name='c_out', reuse=True)
+            c1_out = tfl.fully_connected(tmp_l, 2, activation='tanh', name='c_out', reuse=True)
 
             # C2
             tmp_l = tfl.fully_connected(
-                tf.concat([self.prev_torque_ph[[0, 2, 4, 5, 6]], self.current_angle_ph[4]]),
+                tf.concat([*[self.prev_torque_ph[:, i:i + 1] for i in [0, 2, 4, 5, 6]], self.current_angle_ph[:, 4:5]],1),
                 6, activation='relu', name='c_hidden', reuse=True)
-            c2_out = tfl.fully_connected(tmp_l, 3, activation='tanh', name='c_out', reuse=True)
+            c2_out = tfl.fully_connected(tmp_l, 2, activation='tanh', name='c_out', reuse=True)
 
             # C3
             tmp_l = tfl.fully_connected(
-                tf.concat([self.prev_torque_ph[[0, 2, 4, 6, 7]], self.current_angle_ph[6]]),
+                tf.concat([*[self.prev_torque_ph[:, i:i + 1] for i in [0, 2, 4, 6, 7]], self.current_angle_ph[:, 6:7]],1),
                 6, activation='relu', name='c_hidden', reuse=True)
-            c3_out = tfl.fully_connected(tmp_l, 3, activation='tanh', name='c_out', reuse=True)
+            c3_out = tfl.fully_connected(tmp_l, 2, activation='tanh', name='c_out', reuse=True)
 
         with tf.variable_scope("femur"):
             # F0
             tmp_l = tfl.fully_connected(
-                tf.concat([self.prev_torque_ph[[0, 1]], self.current_angle_ph[1]]),
+                tf.concat([*[self.prev_torque_ph[:, i:i + 1] for i in [0, 1]], self.current_angle_ph[:, 0:1]], 1),
                 5, activation='relu', name='f_hidden')
-            f0_out = tfl.fully_connected(tmp_l, 3, activation='tanh', name='f_out')
+            f0_out = tfl.fully_connected(tmp_l, 2, activation='tanh', name='f_out')
 
             # F1
             tmp_l = tfl.fully_connected(
-                tf.concat([self.prev_torque_ph[[2, 3]], self.current_angle_ph[3]]),
+                tf.concat([*[self.prev_torque_ph[:, i:i + 1] for i in [2, 3]], self.current_angle_ph[:, 3:4]], 1),
                 5, activation='relu', name='f_hidden', reuse=True)
-            f1_out = tfl.fully_connected(tmp_l, 3, activation='tanh', name='f_out', reuse=True)
+            f1_out = tfl.fully_connected(tmp_l, 2, activation='tanh', name='f_out', reuse=True)
 
             # F2
             tmp_l = tfl.fully_connected(
-                tf.concat([self.prev_torque_ph[[4, 5]], self.current_angle_ph[5]]),
+                tf.concat([*[self.prev_torque_ph[:, i:i + 1] for i in [4, 5]], self.current_angle_ph[:, 5:6]], 1),
                 5, activation='relu', name='f_hidden', reuse=True)
-            f2_out = tfl.fully_connected(tmp_l, 3, activation='tanh', name='f_out', reuse=True)
+            f2_out = tfl.fully_connected(tmp_l, 2, activation='tanh', name='f_out', reuse=True)
 
             # F3
             tmp_l = tfl.fully_connected(
-                tf.concat([self.prev_torque_ph[[6, 7]], self.current_angle_ph[7]]),
+                tf.concat([*[self.prev_torque_ph[:, i:i + 1] for i in [6, 7]], self.current_angle_ph[:, 7:8]], 1),
                 5, activation='relu', name='f_hidden', reuse=True)
-            f3_out = tfl.fully_connected(tmp_l, 3, activation='tanh', name='f_out', reuse=True)
+            f3_out = tfl.fully_connected(tmp_l, 2, activation='tanh', name='f_out', reuse=True)
 
-        self.means = tf.concat([c0_out, f0_out, c1_out, f1_out, c2_out, f2_out, c3_out,f3_out], 1)
+        self.means = tf.concat([c0_out, f0_out, c1_out, f1_out, c2_out, f2_out, c3_out, f3_out], 1)
 
         self.lr = 1e-4
 

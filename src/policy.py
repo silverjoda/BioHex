@@ -103,8 +103,8 @@ class Policy(object):
 
         self.lr = 1e-4
 
-        logvar_speed = 1
-        log_vars = tf.get_variable('logvars', (logvar_speed, 8 * 3), tf.float32,
+        logvar_speed = 10
+        log_vars = tf.get_variable('logvars', (logvar_speed, self.act_dim), tf.float32,
                                    tf.constant_initializer(0.0))
         self.log_vars = tf.reduce_sum(log_vars, axis=0) + self.policy_logvar
 
@@ -116,8 +116,8 @@ class Policy(object):
         new parameters being trained.
         """
         logp = -0.5 * tf.reduce_sum(self.log_vars)
-        logp += -0.5 * tf.reduce_sum(tf.square(self.act_ph - self.means) /
-                                     tf.exp(self.log_vars), axis=1)
+        tmp = tf.square(self.act_ph - self.means)
+        logp += -0.5 * tf.reduce_sum(tf.square(self.act_ph - self.means) / tf.exp(self.log_vars), axis=1)
         self.logp = logp
 
         logp_old = -0.5 * tf.reduce_sum(self.old_log_vars_ph)
@@ -175,9 +175,7 @@ class Policy(object):
             loss3 = self.eta_ph * tf.square(tf.maximum(0.0, self.kl - 2.0 * self.kl_targ))
             self.loss = loss1 + loss2 + loss3
         optimizer = tf.train.AdamOptimizer(self.lr_ph)
-        control_effort_opt = tf.train.AdamOptimizer(1e-3)
         self.train_op = optimizer.minimize(self.loss)
-        self.relax_op = control_effort_opt.minimize(self.control_effort)
 
     def _init_session(self):
         """Launch TensorFlow session and initialize variables"""
@@ -186,7 +184,8 @@ class Policy(object):
 
     def sample(self, obs):
         """Draw sample from policy distribution"""
-        feed_dict = {self.obs_ph: obs}
+        feed_dict = {self.prev_torque_ph: obs[:8],
+                     self.current_angle_ph: obs[8:]}
 
         return self.sess.run(self.sampled_act, feed_dict=feed_dict)
 
@@ -199,7 +198,8 @@ class Policy(object):
             advantages: advantages, shape = (N,)
             logger: Logger object, see utils.py
         """
-        feed_dict = {self.obs_ph: observes,
+        feed_dict = {self.prev_torque_ph: observes[:8],
+                     self.current_angle_ph: observes[8:],
                      self.act_ph: actions,
                      self.advantages_ph: advantages,
                      self.beta_ph: self.beta,
@@ -226,7 +226,6 @@ class Policy(object):
             if self.beta < (1 / 30) and self.lr_multiplier < 10:
                 self.lr_multiplier *= 1.5
 
-        self.sess.run(self.relax_op, feed_dict)
 
         logger.log({'PolicyLoss': loss,
                     'PolicyEntropy': entropy,

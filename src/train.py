@@ -316,7 +316,6 @@ def main(env_name, num_episodes, gamma, lam, kl_targ, batch_size, hid1_mult, pol
         hid1_mult: hid1 size for policy and value_f (mutliplier of obs dimension)
         policy_logvar: natural log of initial policy variance
     """
-    
 
     killer = GracefulKiller()
     env, obs_dim, act_dim = init_gym(env_name)

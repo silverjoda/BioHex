@@ -68,18 +68,18 @@ class Policy(object):
     def _coxa_net(self, t_ind, a_ind, reuse):
         w_init = tfl.initializations.xavier(uniform=True)
         input = tf.concat([*[self.prev_torque_ph[:, i:i + 1] for i in t_ind], self.current_angle_ph[:, a_ind : a_ind + 1]], 1)
-        #with tf.variable_scope("coxa", reuse=reuse):
-        tmp_l = tfl.fully_connected(input, 6, activation='relu', weights_init=w_init)
-        c_out = tfl.fully_connected(tmp_l, 1, activation='tanh', weights_init=w_init)
-        return c_out
+        with tf.variable_scope("coxa", reuse=reuse):
+            tmp_l = tfl.fully_connected(input, 6, activation='relu', weights_init=w_init)
+            c_out = tfl.fully_connected(tmp_l, 1, activation='tanh', weights_init=w_init)
+            return c_out
 
     def _femur_net(self, t_ind, a_ind, reuse):
         w_init = tfl.initializations.xavier(uniform=True)
         input = tf.concat([*[self.prev_torque_ph[:, i:i + 1] for i in t_ind], self.current_angle_ph[:, a_ind:a_ind+1]], 1)
-        #with tf.variable_scope("femur", reuse=reuse):
-        tmp_l = tfl.fully_connected(input, 5, activation='relu', weights_init=w_init)
-        f_out = tfl.fully_connected(tmp_l, 1, activation='tanh', weights_init=w_init)
-        return f_out
+        with tf.variable_scope("femur", reuse=reuse):
+            tmp_l = tfl.fully_connected(input, 5, activation='relu', weights_init=w_init)
+            f_out = tfl.fully_connected(tmp_l, 1, activation='tanh', weights_init=w_init)
+            return f_out
 
     def _policy_nn(self):
         """ Neural net for policy approximation function
@@ -90,14 +90,14 @@ class Policy(object):
         """
 
         c0_out = self._coxa_net([0, 1, 2, 4, 6], 0, reuse=False)
-        c1_out = self._coxa_net([0, 2, 3, 4, 6], 2, reuse=False)
-        c2_out = self._coxa_net([0, 2, 4, 5, 6], 4, reuse=False)
-        c3_out = self._coxa_net([0, 2, 4, 6, 7], 6, reuse=False)
+        c1_out = self._coxa_net([0, 2, 3, 4, 6], 2, reuse=True)
+        c2_out = self._coxa_net([0, 2, 4, 5, 6], 4, reuse=True)
+        c3_out = self._coxa_net([0, 2, 4, 6, 7], 6, reuse=True)
 
         f0_out = self._femur_net([0, 1], 0, reuse=False)
-        f1_out = self._femur_net([2, 3], 3, reuse=False)
-        f2_out = self._femur_net([4, 5], 5, reuse=False)
-        f3_out = self._femur_net([5, 6], 7, reuse=False)
+        f1_out = self._femur_net([2, 3], 3, reuse=True)
+        f2_out = self._femur_net([4, 5], 5, reuse=True)
+        f3_out = self._femur_net([5, 6], 7, reuse=True)
 
         self.means = tf.concat([c0_out, f0_out, c1_out, f1_out, c2_out, f2_out, c3_out, f3_out], 1)
 
@@ -189,7 +189,7 @@ class Policy(object):
     def sample(self, obs):
         """Draw sample from policy distribution"""
         feed_dict = {self.prev_torque_ph: obs[0:1, :8],
-                     self.current_angle_ph: obs[0:1, 8:]}
+                     self.current_angle_ph: obs[0:1, 8:16]}
 
         return self.sess.run(self.sampled_act, feed_dict=feed_dict)
 
@@ -203,7 +203,7 @@ class Policy(object):
             logger: Logger object, see utils.py
         """
         feed_dict = {self.prev_torque_ph: observes[:, :8],
-                     self.current_angle_ph: observes[:, 8:],
+                     self.current_angle_ph: observes[:, 8:16],
                      self.act_ph: actions,
                      self.advantages_ph: advantages,
                      self.beta_ph: self.beta,

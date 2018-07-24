@@ -95,13 +95,15 @@ def run_episode(env, policy, scaler, animate=False):
     f_amp = 0.05
 
     torques = np.ones(8)
+    aux_info = env_obs[:5]
     current_angles = env_obs[5:13]
+
 
     while not done:
         if animate:
             env.render()
 
-        obs = np.concatenate((torques, current_angles))
+        obs = np.concatenate((torques, current_angles, aux_info))
         obs = obs.astype(np.float32).reshape((1, -1))
 
         unscaled_obs.append(obs)
@@ -128,6 +130,7 @@ def run_episode(env, policy, scaler, animate=False):
         env_obs, reward, done, _ = env.step(np.squeeze(action, axis=0))
 
         current_angles = env_obs[5:13]
+        aux_info = env_obs[:5]
 
         if not isinstance(reward, float):
             reward = np.asscalar(reward)
@@ -319,7 +322,7 @@ def main(env_name, num_episodes, gamma, lam, kl_targ, batch_size, hid1_mult, pol
     env, obs_dim, act_dim = init_gym(env_name)
 
     # Observations here are the previously applied torques + current angles of joints
-    obs_dim = 8 + 8
+    obs_dim = 8 + 8 + 5
 
     # Actions are 1 torque value per oscillator
     act_dim = 8

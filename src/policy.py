@@ -70,7 +70,7 @@ class Policy(object):
         input = tf.concat([*[self.prev_torque_ph[:, i:i + 1] for i in t_ind], self.current_angle_ph[:, a_ind : a_ind + 1]], 1)
         #with tf.variable_scope("coxa", reuse=reuse):
         tmp_l = tfl.fully_connected(input, 6, activation='relu', weights_init=w_init)
-        c_out = tfl.fully_connected(tmp_l, 1, activation='relu', weights_init=w_init)
+        c_out = tfl.fully_connected(tmp_l, 1, activation='tanh', weights_init=w_init)
         return c_out
 
     def _femur_net(self, t_ind, a_ind, reuse):
@@ -78,7 +78,7 @@ class Policy(object):
         input = tf.concat([*[self.prev_torque_ph[:, i:i + 1] for i in t_ind], self.current_angle_ph[:, a_ind:a_ind+1]], 1)
         #with tf.variable_scope("femur", reuse=reuse):
         tmp_l = tfl.fully_connected(input, 5, activation='relu', weights_init=w_init)
-        f_out = tfl.fully_connected(tmp_l, 1, activation='relu', weights_init=w_init)
+        f_out = tfl.fully_connected(tmp_l, 1, activation='tanh', weights_init=w_init)
         return f_out
 
     def _policy_nn(self):

@@ -91,15 +91,17 @@ def run_episode(env, policy, scaler, animate=False):
     step = 0.0
     scale, offset = scaler.get()
 
-    prev_torques = np.random.rand(8)
-    current_angles = env_obs[5:13]
+    c_amp = 0.05
+    f_amp = 0.05
 
+    torques = np.ones(8)
+    current_angles = env_obs[5:13]
 
     while not done:
         if animate:
             env.render()
 
-        obs = np.concatenate((prev_torques, current_angles))
+        obs = np.concatenate((torques, current_angles))
         obs = obs.astype(np.float32).reshape((1, -1))
 
         unscaled_obs.append(obs)
@@ -107,31 +109,25 @@ def run_episode(env, policy, scaler, animate=False):
         observes.append(obs)
         raw_action = np.squeeze(policy.sample(obs), 0).astype(np.float32)
 
-        # Calculate real oscillator torques
-        c0_p, f0_p, \
-        c1_p, f1_p,\
-        c2_p, f2_p, \
-        c3_p, f3_p = raw_action
+        torques += raw_action * 0.1
 
-        c_amp = 0.01
-        f_amp = 0.01
-
-        t_c0 = c_amp * np.sin(step * c0_p)
-        t_f0 = f_amp * np.sin(step * f0_p)
-        t_c1 = c_amp * np.sin(step * c1_p)
-        t_f1 = f_amp * np.sin(step * f1_p)
-        t_c2 = c_amp * np.sin(step * c2_p)
-        t_f2 = f_amp * np.sin(step * f2_p)
-        t_c3 = c_amp * np.sin(step * c3_p)
-        t_f3 = f_amp * np.sin(step * f3_p)
+        t_c0 = c_amp * np.sin(step * torques[0])
+        t_f0 = f_amp * np.sin(step * torques[1])
+        t_c1 = c_amp * np.sin(step * torques[2])
+        t_f1 = f_amp * np.sin(step * torques[3])
+        t_c2 = c_amp * np.sin(step * torques[4])
+        t_f2 = f_amp * np.sin(step * torques[5])
+        t_c3 = c_amp * np.sin(step * torques[6])
+        t_f3 = f_amp * np.sin(step * torques[7])
 
         action = np.array(([t_c0, t_f0, t_c1, t_f1, t_c2, t_f2, t_c3, t_f3],))
-        prev_torques = action[0]
 
-        print(action)
+        #print(action)
 
         actions.append(action.reshape((1, -1)).astype(np.float32))
         env_obs, reward, done, _ = env.step(np.squeeze(action, axis=0))
+
+        current_angles = env_obs[5:13]
 
         if not isinstance(reward, float):
             reward = np.asscalar(reward)
@@ -400,7 +396,5 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     main(**vars(args))
-
-    # TODO: Try different rewards in environment (travelling forward)
 
 

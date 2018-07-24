@@ -68,17 +68,17 @@ class Policy(object):
     def _coxa_net(self, t_ind, a_ind, reuse):
         w_init = tfl.initializations.xavier(uniform=True)
         input = tf.concat([*[self.prev_torque_ph[:, i:i + 1] for i in t_ind], self.current_angle_ph[:, a_ind : a_ind + 1]], 1)
-        with tf.variable_scope("coxa", reuse=reuse):
-            tmp_l = tfl.fully_connected(input, 6, activation='relu', weights_init=w_init)
-            c_out = tfl.fully_connected(tmp_l, 1, activation='tanh', weights_init=w_init)
+        #with tf.variable_scope("coxa", reuse=reuse):
+        tmp_l = tfl.fully_connected(input, 6, activation='relu', weights_init=w_init)
+        c_out = tfl.fully_connected(tmp_l, 1, activation='relu', weights_init=w_init)
         return c_out
 
     def _femur_net(self, t_ind, a_ind, reuse):
         w_init = tfl.initializations.xavier(uniform=True)
         input = tf.concat([*[self.prev_torque_ph[:, i:i + 1] for i in t_ind], self.current_angle_ph[:, a_ind:a_ind+1]], 1)
-        with tf.variable_scope("femur", reuse=reuse):
-            tmp_l = tfl.fully_connected(input, 5, activation='relu', weights_init=w_init)
-            f_out = tfl.fully_connected(tmp_l, 1, activation='tanh', weights_init=w_init)
+        #with tf.variable_scope("femur", reuse=reuse):
+        tmp_l = tfl.fully_connected(input, 5, activation='relu', weights_init=w_init)
+        f_out = tfl.fully_connected(tmp_l, 1, activation='relu', weights_init=w_init)
         return f_out
 
     def _policy_nn(self):
@@ -90,14 +90,14 @@ class Policy(object):
         """
 
         c0_out = self._coxa_net([0, 1, 2, 4, 6], 0, reuse=False)
-        c1_out = self._coxa_net([0, 2, 3, 4, 6], 2, reuse=True)
-        c2_out = self._coxa_net([0, 2, 4, 5, 6], 4, reuse=True)
-        c3_out = self._coxa_net([0, 2, 4, 6, 7], 6, reuse=True)
+        c1_out = self._coxa_net([0, 2, 3, 4, 6], 2, reuse=False)
+        c2_out = self._coxa_net([0, 2, 4, 5, 6], 4, reuse=False)
+        c3_out = self._coxa_net([0, 2, 4, 6, 7], 6, reuse=False)
 
         f0_out = self._femur_net([0, 1], 0, reuse=False)
-        f1_out = self._femur_net([2, 3], 3, reuse=True)
-        f2_out = self._femur_net([4, 5], 5, reuse=True)
-        f3_out = self._femur_net([5, 6], 7, reuse=True)
+        f1_out = self._femur_net([2, 3], 3, reuse=False)
+        f2_out = self._femur_net([4, 5], 5, reuse=False)
+        f3_out = self._femur_net([5, 6], 7, reuse=False)
 
         self.means = tf.concat([c0_out, f0_out, c1_out, f1_out, c2_out, f2_out, c3_out, f3_out], 1)
 
@@ -116,7 +116,6 @@ class Policy(object):
         new parameters being trained.
         """
         logp = -0.5 * tf.reduce_sum(self.log_vars)
-        tmp = tf.square(self.act_ph - self.means)
         logp += -0.5 * tf.reduce_sum(tf.square(self.act_ph - self.means) / tf.exp(self.log_vars), axis=1)
         self.logp = logp
 
@@ -174,8 +173,13 @@ class Policy(object):
             loss2 = tf.reduce_mean(self.beta_ph * self.kl)
             loss3 = self.eta_ph * tf.square(tf.maximum(0.0, self.kl - 2.0 * self.kl_targ))
             self.loss = loss1 + loss2 + loss3
+
+        self.control_effort = tf.reduce_sum(tf.square(self.means))
+
         optimizer = tf.train.AdamOptimizer(self.lr_ph)
+        ctrl_optimizer = tf.train.AdamOptimizer(1e-4)
         self.train_op = optimizer.minimize(self.loss)
+        self.relax_op = ctrl_optimizer.minimize(self.control_effort)
 
     def _init_session(self):
         """Launch TensorFlow session and initialize variables"""
@@ -184,8 +188,8 @@ class Policy(object):
 
     def sample(self, obs):
         """Draw sample from policy distribution"""
-        feed_dict = {self.prev_torque_ph: obs[:8],
-                     self.current_angle_ph: obs[8:]}
+        feed_dict = {self.prev_torque_ph: obs[0:1, :8],
+                     self.current_angle_ph: obs[0:1, 8:]}
 
         return self.sess.run(self.sampled_act, feed_dict=feed_dict)
 
@@ -198,8 +202,8 @@ class Policy(object):
             advantages: advantages, shape = (N,)
             logger: Logger object, see utils.py
         """
-        feed_dict = {self.prev_torque_ph: observes[:8],
-                     self.current_angle_ph: observes[8:],
+        feed_dict = {self.prev_torque_ph: observes[:, :8],
+                     self.current_angle_ph: observes[:, 8:],
                      self.act_ph: actions,
                      self.advantages_ph: advantages,
                      self.beta_ph: self.beta,
@@ -226,6 +230,8 @@ class Policy(object):
             if self.beta < (1 / 30) and self.lr_multiplier < 10:
                 self.lr_multiplier *= 1.5
 
+        # Relax outputs
+        self.sess.run(self.relax_op, feed_dict)
 
         logger.log({'PolicyLoss': loss,
                     'PolicyEntropy': entropy,

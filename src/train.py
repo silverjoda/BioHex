@@ -99,7 +99,7 @@ def run_episode(env, policy, scaler, animate=False):
         if animate:
             env.render()
 
-        obs = np.concatenate(prev_torques, current_angles)
+        obs = np.concatenate((prev_torques, current_angles))
         obs = obs.astype(np.float32).reshape((1, -1))
 
         unscaled_obs.append(obs)
@@ -113,8 +113,8 @@ def run_episode(env, policy, scaler, animate=False):
         c2_p, f2_p, \
         c3_p, f3_p = raw_action
 
-        c_amp = 1
-        f_amp = 1
+        c_amp = 0.01
+        f_amp = 0.01
 
         t_c0 = c_amp * np.sin(step * c0_p)
         t_f0 = f_amp * np.sin(step * f0_p)
@@ -125,8 +125,10 @@ def run_episode(env, policy, scaler, animate=False):
         t_c3 = c_amp * np.sin(step * c3_p)
         t_f3 = f_amp * np.sin(step * f3_p)
 
-        action = np.array([t_c0, t_f0, t_c1, t_f1, t_c2, t_f2, t_c3, t_f3])
-        prev_torques = action
+        action = np.array(([t_c0, t_f0, t_c1, t_f1, t_c2, t_f2, t_c3, t_f3],))
+        prev_torques = action[0]
+
+        print(action)
 
         actions.append(action.reshape((1, -1)).astype(np.float32))
         env_obs, reward, done, _ = env.step(np.squeeze(action, axis=0))
@@ -134,7 +136,7 @@ def run_episode(env, policy, scaler, animate=False):
         if not isinstance(reward, float):
             reward = np.asscalar(reward)
         rewards.append(reward)
-        step += 1e-2  # increment time step feature
+        step += 0.1  # increment time step feature
 
     return (np.concatenate(observes), np.concatenate(actions),
             np.array(rewards, dtype=np.float64), np.concatenate(unscaled_obs))
@@ -398,5 +400,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     main(**vars(args))
+
+    # TODO: Try different rewards in environment (travelling forward)
 
 

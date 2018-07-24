@@ -52,8 +52,8 @@ class Policy(object):
     def _placeholders(self):
         """ Input placeholders"""
         # observations, actions and advantages:
-        self.prev_torque_ph = tf.placeholder(tf.float32, (None, 8), 'obs')
-        self.current_angle_ph = tf.placeholder(tf.float32, (None, 8), 'obs')
+        self.prev_torque_ph = tf.placeholder(tf.float32, (None, 8), 'p_trq')
+        self.current_angle_ph = tf.placeholder(tf.float32, (None, 8), 'c_ang')
         self.act_ph = tf.placeholder(tf.float32, (None, self.act_dim), 'act')
         self.advantages_ph = tf.placeholder(tf.float32, (None,), 'advantages')
         # strength of D_KL loss terms:
@@ -65,6 +65,22 @@ class Policy(object):
         self.old_log_vars_ph = tf.placeholder(tf.float32, (self.act_dim,), 'old_log_vars')
         self.old_means_ph = tf.placeholder(tf.float32, (None, self.act_dim), 'old_means')
 
+    def _coxa_net(self, t_ind, a_ind, reuse):
+        w_init = tfl.initializations.xavier(uniform=True)
+        input = tf.concat([*[self.prev_torque_ph[:, i:i + 1] for i in t_ind], self.current_angle_ph[:, a_ind : a_ind + 1]], 1)
+        with tf.variable_scope("coxa", reuse=reuse):
+            tmp_l = tfl.fully_connected(input, 6, activation='relu', weights_init=w_init)
+            c_out = tfl.fully_connected(tmp_l, 1, activation='tanh', weights_init=w_init)
+        return c_out
+
+    def _femur_net(self, t_ind, a_ind, reuse):
+        w_init = tfl.initializations.xavier(uniform=True)
+        input = tf.concat([*[self.prev_torque_ph[:, i:i + 1] for i in t_ind], self.current_angle_ph[:, a_ind:a_ind+1]], 1)
+        with tf.variable_scope("femur", reuse=reuse):
+            tmp_l = tfl.fully_connected(input, 5, activation='relu', weights_init=w_init)
+            f_out = tfl.fully_connected(tmp_l, 1, activation='tanh', weights_init=w_init)
+        return f_out
+
     def _policy_nn(self):
         """ Neural net for policy approximation function
 
@@ -73,56 +89,15 @@ class Policy(object):
          for each action dimension (i.e. variances not determined by NN).
         """
 
-        # Make the individual osciallator weights
-        with tf.variable_scope("coxa"):
-            # C0
-            tmp_l = tfl.fully_connected(tf.concat([*[self.prev_torque_ph[:,i:i+1] for i in [0,1,2,4,6]], self.current_angle_ph[:, 0:1]], 1),
-                                    6, activation='relu', name='c_hidden')
-            c0_out = tfl.fully_connected(tmp_l, 2, activation = 'tanh', name='c_out')
+        c0_out = self._coxa_net([0, 1, 2, 4, 6], 0, reuse=False)
+        c1_out = self._coxa_net([0, 2, 3, 4, 6], 2, reuse=True)
+        c2_out = self._coxa_net([0, 2, 4, 5, 6], 4, reuse=True)
+        c3_out = self._coxa_net([0, 2, 4, 6, 7], 6, reuse=True)
 
-            # C1
-            tmp_l = tfl.fully_connected(
-                tf.concat([*[self.prev_torque_ph[:, i:i + 1] for i in [0, 2, 3, 4, 6]], self.current_angle_ph[:, 2:3]],
-                          1),
-                6, activation='relu', name='c_hidden', reuse=True)
-            c1_out = tfl.fully_connected(tmp_l, 2, activation='tanh', name='c_out', reuse=True)
-
-            # C2
-            tmp_l = tfl.fully_connected(
-                tf.concat([*[self.prev_torque_ph[:, i:i + 1] for i in [0, 2, 4, 5, 6]], self.current_angle_ph[:, 4:5]],1),
-                6, activation='relu', name='c_hidden', reuse=True)
-            c2_out = tfl.fully_connected(tmp_l, 2, activation='tanh', name='c_out', reuse=True)
-
-            # C3
-            tmp_l = tfl.fully_connected(
-                tf.concat([*[self.prev_torque_ph[:, i:i + 1] for i in [0, 2, 4, 6, 7]], self.current_angle_ph[:, 6:7]],1),
-                6, activation='relu', name='c_hidden', reuse=True)
-            c3_out = tfl.fully_connected(tmp_l, 2, activation='tanh', name='c_out', reuse=True)
-
-        with tf.variable_scope("femur"):
-            # F0
-            tmp_l = tfl.fully_connected(
-                tf.concat([*[self.prev_torque_ph[:, i:i + 1] for i in [0, 1]], self.current_angle_ph[:, 0:1]], 1),
-                5, activation='relu', name='f_hidden')
-            f0_out = tfl.fully_connected(tmp_l, 2, activation='tanh', name='f_out')
-
-            # F1
-            tmp_l = tfl.fully_connected(
-                tf.concat([*[self.prev_torque_ph[:, i:i + 1] for i in [2, 3]], self.current_angle_ph[:, 3:4]], 1),
-                5, activation='relu', name='f_hidden', reuse=True)
-            f1_out = tfl.fully_connected(tmp_l, 2, activation='tanh', name='f_out', reuse=True)
-
-            # F2
-            tmp_l = tfl.fully_connected(
-                tf.concat([*[self.prev_torque_ph[:, i:i + 1] for i in [4, 5]], self.current_angle_ph[:, 5:6]], 1),
-                5, activation='relu', name='f_hidden', reuse=True)
-            f2_out = tfl.fully_connected(tmp_l, 2, activation='tanh', name='f_out', reuse=True)
-
-            # F3
-            tmp_l = tfl.fully_connected(
-                tf.concat([*[self.prev_torque_ph[:, i:i + 1] for i in [6, 7]], self.current_angle_ph[:, 7:8]], 1),
-                5, activation='relu', name='f_hidden', reuse=True)
-            f3_out = tfl.fully_connected(tmp_l, 2, activation='tanh', name='f_out', reuse=True)
+        f0_out = self._femur_net([0, 1], 0, reuse=False)
+        f1_out = self._femur_net([2, 3], 3, reuse=True)
+        f2_out = self._femur_net([4, 5], 5, reuse=True)
+        f3_out = self._femur_net([5, 6], 7, reuse=True)
 
         self.means = tf.concat([c0_out, f0_out, c1_out, f1_out, c2_out, f2_out, c3_out, f3_out], 1)
 

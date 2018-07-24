@@ -90,11 +90,10 @@ def run_episode(env, policy, scaler, animate=False):
     done = False
     step = 0.0
     scale, offset = scaler.get()
-    scale[-1] = 1.0  # don't scale time step feature
-    offset[-1] = 0.0  # don't offset time step feature
 
     prev_torques = np.random.rand(8)
     current_angles = env_obs[5:13]
+
 
     while not done:
         if animate:
@@ -109,19 +108,22 @@ def run_episode(env, policy, scaler, animate=False):
         raw_action = np.squeeze(policy.sample(obs), 0).astype(np.float32)
 
         # Calculate real oscillator torques
-        c0_p1, c0_p2, c0_p3, f0_p1, f0_p2, f0_p3, \
-        c1_p1, c1_p2, c1_p3, f1_p1, f1_p2, f1_p3, \
-        c2_p1, c2_p2, c2_p3, f2_p1, f2_p2, f2_p3, \
-        c3_p1, c3_p2, c3_p3, f3_p1, f3_p2, f3_p3 = raw_action
+        c0_p, f0_p, \
+        c1_p, f1_p,\
+        c2_p, f2_p, \
+        c3_p, f3_p = raw_action
 
-        t_c0 = c0_p1 * np.sin(step * c0_p2 + c0_p3)
-        t_f0 = f0_p1 * np.sin(step * f0_p2 + f0_p3)
-        t_c1 = c1_p1 * np.sin(step * c1_p2 + c1_p3)
-        t_f1 = f1_p1 * np.sin(step * f1_p2 + f1_p3)
-        t_c2 = c2_p1 * np.sin(step * c2_p2 + c2_p3)
-        t_f2 = f2_p1 * np.sin(step * f2_p2 + f2_p3)
-        t_c3 = c3_p1 * np.sin(step * c3_p2 + c3_p3)
-        t_f3 = f3_p1 * np.sin(step * f3_p2 + f3_p3)
+        c_amp = 1
+        f_amp = 1
+
+        t_c0 = c_amp * np.sin(step * c0_p)
+        t_f0 = f_amp * np.sin(step * f0_p)
+        t_c1 = c_amp * np.sin(step * c1_p)
+        t_f1 = f_amp * np.sin(step * f1_p)
+        t_c2 = c_amp * np.sin(step * c2_p)
+        t_f2 = f_amp * np.sin(step * f2_p)
+        t_c3 = c_amp * np.sin(step * c3_p)
+        t_f3 = f_amp * np.sin(step * f3_p)
 
         action = np.array([t_c0, t_f0, t_c1, t_f1, t_c2, t_f2, t_c3, t_f3])
         prev_torques = action
@@ -318,18 +320,24 @@ def main(env_name, num_episodes, gamma, lam, kl_targ, batch_size, hid1_mult, pol
 
     killer = GracefulKiller()
     env, obs_dim, act_dim = init_gym(env_name)
-    obs_dim += 1  # add 1 to obs dimension for time step feature (see run_episode())
+
+    # Observations here are the previously applied torques + current angles of joints
+    obs_dim = 8 + 8
+
+    # Actions are 1 torque value per oscillator
+    act_dim = 8
+
     now = datetime.utcnow().strftime("%b-%d_%H:%M:%S")  # create unique directories
     logger = Logger(logname=env_name, now=now)
-    aigym_path = os.path.join('/tmp', env_name, now)
     
     scaler = Scaler(obs_dim)
     val_func = NNValueFunction(obs_dim, hid1_mult)
     policy = Policy(obs_dim, act_dim, kl_targ, hid1_mult, policy_logvar)
 
+
     if evaluate:
         print("Evaluating: ")
-        eval_agent(env, policy, logger, obs_dim, act_dim, 5)
+        eval_agent(env, policy, logger, obs_dim, act_dim, 15)
         exit()
 
     if load_ckpt:
